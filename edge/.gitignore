@@ -1,0 +1,11 @@
+# Run outputs: events.json, crops, run summaries
+runs/
+
+# Offline publish spool
+spool/
+
+# Streamlit upload staging
+data/uploads/
+
+__pycache__/
+*.py[cod]
