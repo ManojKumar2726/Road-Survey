@@ -346,6 +346,11 @@ State this plainly rather than letting a reviewer find it:
 
 ## Build plan, phase by phase
 
+> **Status: all seven phases built and verified.** Measured outcomes are
+> recorded per phase below. Deviations from the plan as written are called out
+> where they happened — notably the `--phase` / stride correction in phase 2 and
+> the unconfirmed-artefact nuance in phase 6.
+
 Seven phases. Each one ends in something you can run and show, so a deadline
 that lands mid-plan still leaves a working demo. **Phase 5 is the first time
 both windows are live together** — that's the minimum viable deliverable;
@@ -517,3 +522,44 @@ Phase 1 ─┘                ├─> 5 (demo works) ─> 6 ─> 7
 
 Phase 1 is the one to get right and the one most likely to eat time. Phase 5 is
 the one that must land.
+
+---
+
+## Verified outcomes
+
+What each checkpoint actually measured, once built.
+
+| phase | checkpoint | result |
+|---|---|---|
+| 1 | event count sane vs. the lab | **exact** — 412 boxes, 208 unassigned, 14 tracks vs. the lab's 14 defects; 12 events after flicker rejection; worst defect resolves to the same peak frame (135) and confidence (0.69) |
+| 2 | fixes land on real road; phases differ | fixes on Anna Salai; **plan corrected** — `--phase` does nothing at stride 1 (identical confidences); at stride 3 phases give 5/4/5 events |
+| 3 | rows land; spool survives restart | 12 events + 12 crops (105 KB) stored; server killed mid-run spooled 10 batches which drained on reconnect; re-post returned 4 duplicates, 0 accepted |
+| 4 | upload → stream → post | 60-frame pass, 3 events, **39 KB sent against a 12.3 MB clip — 99.7% saved**; zero exceptions under `AppTest` |
+| 5 | both windows live together | KPI advanced **32 → 33 → 36 → 37 → 41 → 44** during a pass, zero JS errors |
+| 6 | one pin per defect, singles stay unconfirmed | 14 sightings → **5 defects**, 4 open + 1 unconfirmed; independently reproduced the phase-2 pothole miss as `BUS_100, BUS_102` but not `BUS_101`; 16 unit tests pass |
+| 7 | populated map, live pass lands on it | seeded 92 sightings → 39 defects across 10 buses; a live pass added 11 sightings but only **1 new defect** — 5 existing defects went 3→4 buses, 4 alerts fired |
+
+Three things only the browser caught in phase 5, worth recording because
+reading the code would not have found them:
+
+- CARTO's dark basemap now watermarks **API KEY REQUIRED** across every tile.
+  Replaced with OSM tiles inverted in CSS, scoped to the tile pane.
+- `preferCanvas: true` left circle markers with no `_path` element, so the
+  arrival ping animated nothing. Markers went 0 → 35 in the DOM once switched
+  to SVG.
+- The default Defects view opened empty while clustering was still a stub,
+  which reads as a broken dashboard.
+
+### Deviations from the plan as written
+
+- **`--phase` needs `--stride ≥ 2`.** The plan asserted phase alone varies a
+  pass. It does not. Corrected above, with a runtime warning in `run_edge.py`.
+- **The unconfirmed survivor was not the conf-0.29 artefact.** The plan
+  predicted that specific shadow call would stay unconfirmed; it was measured
+  at stride 1 on the full clip, and at stride 3 the single-bus sighting that
+  surfaced was an alligator crack at conf 0.70. The mechanism held — one bus
+  alone does not confirm — but confidence was not the tell.
+- **Route corridors are hand-plotted**, approximate to ~30 m, not traced from
+  Overpass. Adequate for the map; noted in each GeoJSON.
+- **Port 8000 was occupied** on the development machine by an unrelated app, so
+  testing ran on 8010. The API URL is configurable throughout.

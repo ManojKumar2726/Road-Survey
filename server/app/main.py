@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from . import db as dbmod
 from .db import Base, SessionLocal, engine, init_dirs
 from .models import Route
-from .routers import admin, defects, events, fleet
+from .routers import admin, defects, events, fleet, reports
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = SERVER_DIR.parent
@@ -94,6 +94,7 @@ app.add_middleware(
 app.include_router(events.router)
 app.include_router(defects.router)
 app.include_router(fleet.router)
+app.include_router(reports.router)
 app.include_router(admin.router)
 
 

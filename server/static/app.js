@@ -315,6 +315,37 @@ function daysBetween(a, b) {
   return Math.floor((new Date(b) - new Date(a)) / 86400000);
 }
 
+/* ----------------------------------------------------------------- alerts */
+
+// A severity threshold, evaluated client-side. Real SMS/WhatsApp delivery is
+// an integration cost a prototype cannot justify, so this shows the rule
+// firing rather than pretending a message was sent -- see V1-Plan.md.
+const ALERT_SEVERITY = 0.75;
+const ALERT_CONF = 0.55;
+
+function maybeAlert(ev) {
+  if ((ev.severity || 0) < ALERT_SEVERITY) return;
+  if ((ev.confidence || 0) < ALERT_CONF) return;
+
+  const el = document.createElement("div");
+  el.className = "alert";
+  el.style.borderLeftColor = colourOf(ev.damage_type);
+  el.innerHTML =
+    `<h5><span style="color:${colourOf(ev.damage_type)}">⚠</span> ` +
+    `${labelOf(ev.damage_type)} · ${fmt(ev.confidence * 100)}%</h5>` +
+    `<p>${ev.bus_id} · ${ev.route_id || "—"}<br>` +
+    `${ev.lat != null ? fmt(ev.lat, 5) + ", " + fmt(ev.lon, 5) : "no fix"}</p>`;
+  el.onclick = () => select(ev, "events");
+
+  const box = $("alerts");
+  box.prepend(el);
+  while (box.children.length > 4) box.lastChild.remove();
+  setTimeout(() => {
+    el.classList.add("out");
+    setTimeout(() => el.remove(), 400);
+  }, 9000);
+}
+
 /* ------------------------------------------------------------------- kpis */
 
 function renderStats(s) {
@@ -392,6 +423,7 @@ async function poll() {
       state.events.set(e.id, e);
       state.lastEventId = Math.max(state.lastEventId, e.id);
       newIds.add(e.id);
+      if (!state.firstLoad) maybeAlert(e);  // don't replay history as alerts
     }
 
     const defects = await api("/api/defects?limit=5000");

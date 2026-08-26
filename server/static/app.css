@@ -183,6 +183,26 @@ tbody tr.empty td {
 .st-unconfirmed { color: var(--warn); border-color: #4a3a10; }
 .st-repaired    { color: var(--muted); }
 
+/* ---------------------------------------------------------------- alerts */
+
+.alerts {
+  position: fixed; top: 62px; right: 18px; z-index: 950;
+  display: flex; flex-direction: column; gap: 8px; width: 290px;
+  pointer-events: none;
+}
+.alert {
+  background: var(--panel); border: 1px solid var(--line);
+  border-left: 4px solid var(--bad); border-radius: 8px;
+  padding: 9px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.55);
+  animation: slidein .35s ease-out;
+  pointer-events: auto; cursor: pointer;
+}
+.alert h5 { margin: 0 0 2px; font-size: 12px; display: flex; gap: 6px; align-items: center; }
+.alert p  { margin: 0; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.alert.out { animation: slideout .35s ease-in forwards; }
+@keyframes slidein  { from { opacity: 0; transform: translateX(24px); } }
+@keyframes slideout { to   { opacity: 0; transform: translateX(24px); } }
+
 /* ---------------------------------------------------------------- detail */
 
 .detail {
