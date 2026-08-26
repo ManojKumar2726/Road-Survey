@@ -1,0 +1,37 @@
+{
+  "type": "Feature",
+  "properties": {
+    "route_id": "route-570",
+    "name": "570 — Rajiv Gandhi Salai (OMR)",
+    "city": "Chennai",
+    "speed_kmh": 32,
+    "note": "Madhya Kailash -> Thoraipakkam, south along OMR. Hand-plotted corridor, approximate to within ~30 m; replace with a traced or Overpass-derived polyline if precision matters."
+  },
+  "geometry": {
+    "type": "LineString",
+    "coordinates": [
+      [80.24700, 12.99500],
+      [80.24740, 12.99310],
+      [80.24790, 12.99120],
+      [80.24820, 12.98940],
+      [80.24850, 12.98750],
+      [80.24880, 12.98560],
+      [80.24920, 12.98360],
+      [80.24950, 12.98150],
+      [80.24960, 12.97930],
+      [80.24940, 12.97700],
+      [80.24900, 12.97480],
+      [80.24850, 12.97260],
+      [80.24790, 12.97040],
+      [80.24720, 12.96820],
+      [80.24650, 12.96590],
+      [80.24580, 12.96360],
+      [80.24510, 12.96130],
+      [80.24440, 12.95900],
+      [80.24360, 12.95670],
+      [80.24280, 12.95440],
+      [80.24200, 12.95210],
+      [80.24120, 12.95000]
+    ]
+  }
+}

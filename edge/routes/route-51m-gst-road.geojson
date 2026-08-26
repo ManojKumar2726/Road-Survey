@@ -1,0 +1,36 @@
+{
+  "type": "Feature",
+  "properties": {
+    "route_id": "route-51m",
+    "name": "51M — GST Road (Guindy – Pallavaram)",
+    "city": "Chennai",
+    "speed_kmh": 28,
+    "note": "Guindy -> Pallavaram, southwest along GST Road past St Thomas Mount and the airport. Hand-plotted corridor, approximate to within ~30 m; replace with a traced or Overpass-derived polyline if precision matters."
+  },
+  "geometry": {
+    "type": "LineString",
+    "coordinates": [
+      [80.22000, 13.00900],
+      [80.21830, 13.00740],
+      [80.21660, 13.00580],
+      [80.21480, 13.00420],
+      [80.21300, 13.00260],
+      [80.21120, 13.00090],
+      [80.20940, 12.99920],
+      [80.20760, 12.99750],
+      [80.20570, 12.99570],
+      [80.20380, 12.99390],
+      [80.20190, 12.99210],
+      [80.20000, 12.99030],
+      [80.19810, 12.98840],
+      [80.19620, 12.98650],
+      [80.19430, 12.98450],
+      [80.19240, 12.98250],
+      [80.19050, 12.98050],
+      [80.18860, 12.97840],
+      [80.18670, 12.97630],
+      [80.18480, 12.97420],
+      [80.18300, 12.97200]
+    ]
+  }
+}

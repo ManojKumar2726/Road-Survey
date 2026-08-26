@@ -1,0 +1,38 @@
+{
+  "type": "Feature",
+  "properties": {
+    "route_id": "route-21g",
+    "name": "21G — Anna Salai (Mount Road)",
+    "city": "Chennai",
+    "speed_kmh": 24,
+    "note": "Thousand Lights -> Saidapet, southwest along Anna Salai. Hand-plotted corridor, approximate to within ~30 m; replace with a traced or Overpass-derived polyline if precision matters."
+  },
+  "geometry": {
+    "type": "LineString",
+    "coordinates": [
+      [80.25640, 13.06410],
+      [80.25470, 13.06220],
+      [80.25300, 13.06020],
+      [80.25130, 13.05840],
+      [80.24980, 13.05680],
+      [80.24900, 13.05520],
+      [80.24860, 13.05340],
+      [80.24830, 13.05140],
+      [80.24800, 13.04920],
+      [80.24760, 13.04680],
+      [80.24700, 13.04430],
+      [80.24640, 13.04180],
+      [80.24540, 13.03930],
+      [80.24400, 13.03700],
+      [80.24230, 13.03490],
+      [80.24020, 13.03300],
+      [80.23780, 13.03130],
+      [80.23520, 13.02970],
+      [80.23240, 13.02820],
+      [80.22950, 13.02680],
+      [80.22650, 13.02540],
+      [80.22400, 13.02400],
+      [80.22240, 13.02250]
+    ]
+  }
+}
