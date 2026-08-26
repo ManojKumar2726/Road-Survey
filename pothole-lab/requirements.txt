@@ -1,0 +1,17 @@
+# Core
+ultralytics>=8.3.0
+opencv-python>=4.9.0
+huggingface_hub>=0.23.0
+hf_xet>=1.0.0        # faster Hub downloads; drop it if it won't build on your platform
+PyYAML>=6.0
+
+# UI
+streamlit>=1.36.0
+pandas>=2.0.0
+
+# Tracking (ByteTrack/BoT-SORT association solver)
+lap>=0.5.12
+
+# torch / torchvision are intentionally NOT pinned here -- install the build that
+# matches your CUDA version first, e.g. for CUDA 12.8:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128

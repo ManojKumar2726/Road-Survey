@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Model weights -- downloaded on demand, never committed
+weights/
+*.pt
+*.onnx
+*.engine
+
+# Lab I/O
+outputs/*
+!outputs/.gitkeep
+data/videos/*
+!data/videos/.gitkeep
+data/images/*
+!data/images/.gitkeep
+
+.streamlit/secrets.toml
+.DS_Store
