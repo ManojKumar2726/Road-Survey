@@ -1,0 +1,14 @@
+# Onboard system.
+#
+# Detection, taxonomy and video I/O come from the sibling road-damage-lab --
+# install its requirements first (it pulls ultralytics, opencv and torch):
+#
+#   pip install -r ../road-damage-lab/requirements.txt
+#   pip install -r requirements.txt
+
+# 1.50+ for the `width=` argument that replaced `use_container_width`.
+# Verified on 1.62.0.
+streamlit>=1.50.0
+
+# Publishing uses urllib from the standard library on purpose: one less
+# dependency on a unit that has to boot in a bus.
