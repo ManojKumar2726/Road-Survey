@@ -14,6 +14,7 @@ import json
 import sys
 from pathlib import Path
 
+from edgecore.gps import RouteReplay, TrackReplay, get_route, parse_when
 from edgecore.pipeline import Pipeline, PipelineConfig
 
 EDGE_DIR = Path(__file__).resolve().parent
@@ -23,6 +24,23 @@ DEFAULT_OUT = EDGE_DIR / "runs"
 def _clear_line() -> None:
     """Wipe the in-place progress line so an event line doesn't land on top."""
     sys.stdout.write("\r" + " " * 78 + "\r")
+
+
+def build_gps(args) -> object | None:
+    """A position source for this pass, or None if no route was given."""
+    if args.track_file:
+        return TrackReplay(args.track_file, start_time=parse_when(args.at))
+    if not args.route:
+        return None
+    return RouteReplay(
+        get_route(args.route),
+        speed_kmh=args.speed,
+        start_offset_m=args.start_offset,
+        start_time=parse_when(args.at),
+        gps_noise_m=args.gps_noise,
+        speed_jitter=args.speed_jitter,
+        seed=args.seed,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,6 +69,37 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--width", type=int, default=0, help="Downscale frames to this width")
     p.add_argument("--max-frames", type=int, default=0)
 
+    g = p.add_argument_group("position and time (simulated)")
+    g.add_argument("--speed", type=float, default=None, help="Override the route's nominal km/h")
+    g.add_argument(
+        "--start-offset",
+        type=float,
+        default=0.0,
+        help="Metres along the route where this pass begins. A 10 s clip covers "
+        "only ~85 m, so offsets are how different passes cover different "
+        "stretches of the same corridor.",
+    )
+    g.add_argument(
+        "--gps-noise",
+        type=float,
+        default=0.0,
+        help="Metres of Gaussian scatter per fix, simulating urban GPS drift",
+    )
+    g.add_argument(
+        "--speed-jitter",
+        type=float,
+        default=0.0,
+        help="Fractional speed variation for this pass, e.g. 0.1 for +/-10%%",
+    )
+    g.add_argument(
+        "--at",
+        default=None,
+        help="Backdate the pass. Must use the '=' form because the value looks "
+        "like a flag: --at=-2h, --at=-1d, or --at=2026-08-20T09:15",
+    )
+    g.add_argument("--track-file", default=None, help="Replay a real GPX/CSV track instead of simulating")
+    g.add_argument("--seed", type=int, default=None, help="Seed the noise/jitter RNG for a repeatable pass")
+
     p.add_argument("--min-frames", type=int, default=None, help="Sightings before a track counts")
     p.add_argument("--miss-tolerance", type=int, default=None, help="Frames unseen before a track closes")
 
@@ -62,6 +111,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+
+    # Phase selects which frames of each stride group this pass sees, so it only
+    # means anything when there is more than one to choose from. At stride 1
+    # every phase samples the same frames and two "different" passes come back
+    # bit-identical -- which silently makes confirmation counts meaningless.
+    if args.phase and args.stride < 2:
+        print(
+            f"  warning: --phase {args.phase} has no effect at --stride 1 -- every "
+            "phase sees the same frames.\n"
+            "           Use --stride 2 or 3 to make passes detect differently.",
+            file=sys.stderr,
+        )
+    elif args.phase >= args.stride > 1:
+        print(
+            f"  warning: --phase {args.phase} wraps at --stride {args.stride}; "
+            f"it behaves as phase {args.phase % args.stride}.",
+            file=sys.stderr,
+        )
 
     source: str | int = int(args.source) if str(args.source).isdigit() else args.source
     clip_stem = Path(str(source)).stem if not isinstance(source, int) else f"cam{source}"
@@ -96,12 +163,24 @@ def main() -> int:
         },
     )
 
-    pipe = Pipeline(cfg)
+    gps = build_gps(args)
+
+    pipe = Pipeline(cfg, gps=gps)
     if not args.quiet:
         d = pipe.describe()
         print(f"=== {d['model_name']}  on {d['device']} ===")
         print(f"    {args.bus}" + (f" · route {args.route}" if args.route else ""))
         print(f"    conf {d['conf']}  stride {args.stride}  phase {args.phase}")
+        if gps is not None:
+            g = gps.describe()
+            if "route_id" in g:
+                print(
+                    f"    {g['route_name']}  ({g['route_length_m']:.0f} m)  "
+                    f"{g['speed_kmh']} km/h from +{g['start_offset_m']:.0f} m"
+                )
+            print(f"    clock starts {g.get('start_time', '-')}")
+        else:
+            print("    no route -- events will have no position")
 
     events = []
     for upd in pipe.run(source):
@@ -140,11 +219,43 @@ def main() -> int:
         json.dumps(payload, indent=2), encoding="utf-8"
     )
 
+    # Drop this straight into geojson.io to check the fixes land on real road.
+    located = [e for e in events if e.has_fix]
+    if located:
+        features = [
+            {
+                "type": "Feature",
+                "properties": {
+                    k: v
+                    for k, v in e.to_dict().items()
+                    if k not in ("lat", "lon", "bbox")
+                },
+                "geometry": {"type": "Point", "coordinates": [e.lon, e.lat]},
+            }
+            for e in located
+        ]
+        if gps is not None and hasattr(gps, "route"):
+            features.append(gps.route.as_geojson())
+        (out_dir / "events.geojson").write_text(
+            json.dumps({"type": "FeatureCollection", "features": features}, indent=2),
+            encoding="utf-8",
+        )
+
     stats = pipe.stats()
     wire = sum(e.wire_bytes for e in events)
     stats["wire_bytes"] = wire
+    if located and gps is not None and hasattr(gps, "span_m"):
+        stats["road_covered_m"] = round(gps.span_m(stats.get("steps", 0) * args.stride), 1)
     (out_dir / "run.json").write_text(
-        json.dumps({"config": vars(args), "stats": stats}, indent=2, default=str),
+        json.dumps(
+            {
+                "config": vars(args),
+                "gps": gps.describe() if gps is not None else None,
+                "stats": stats,
+            },
+            indent=2,
+            default=str,
+        ),
         encoding="utf-8",
     )
 

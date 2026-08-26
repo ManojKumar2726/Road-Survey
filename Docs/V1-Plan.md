@@ -273,33 +273,58 @@ confirmation count would carry no information at all.
 
 | flag | simulates | effect |
 |---|---|---|
-| `--phase N` | never hitting a defect from the same frame twice | samples *different frames* → different detections |
+| `--stride N --phase K` | never hitting a defect from the same frame twice | samples *different frames* → different detections |
 | `--gps-noise 6` | urban GPS drift | fixes land 5–10 m apart across passes |
-| `--speed-jitter` | traffic, signals, driver | shifts the frame→position mapping |
-| `--at "-2h"` | the bus came round again | backdates the run |
+| `--speed-jitter 0.1` | traffic, signals, driver | shifts the frame→position mapping |
+| `--at=-2h` | the bus came round again | backdates the run |
+| `--start-offset M` | a different stretch of the same corridor | moves the pass along the route |
 
-`--phase` matters most and isn't a fake: bus 001 samples frames 0,2,4…, bus 002
-samples 1,3,5…. Same footage, but different frames into the detector means
-different tracker behaviour and a **genuinely different detection set**.
+**`--phase` only works with `--stride ≥ 2`, and this was measured, not assumed.**
+At stride 1, phase 0 and phase 1 sample frames 0,1,2… and 1,2,3… — essentially
+the same set — and the two passes came back with *identical* damage counts and
+identical confidences to two decimal places. Confirmation counts computed off
+that would be pure decoration. `run_edge.py` warns if you ask for a phase at
+stride 1.
 
-That is what gives the demo information rather than decoration:
+At stride 3, the three phases genuinely diverge on `62_10-07-2023.mp4`:
 
-- a clear pothole is caught on every phase → `distinct_buses=3` → **confirmed**
-- the shadowed-pavement false positive at conf 0.29 from the
-  [model comparison](../road-damage-lab/docs/model-comparison-2026-08-26.md)
-  fires on some phases and not others → stays **unconfirmed**, greys out
+| pass | events | mix | confidences |
+|---|---:|---|---|
+| `--stride 3 --phase 0` | 5 | 3 alligator, 1 pothole, 1 long. | 0.46 0.59 0.65 0.69 0.75 |
+| `--stride 3 --phase 1` | 4 | 3 alligator, 1 long. | 0.48 0.62 0.70 0.77 |
+| `--stride 3 --phase 2` | 5 | 3 alligator, 1 pothole, 1 long. | 0.52 0.62 0.63 0.67 0.76 |
 
-So the confirmation filter is seen working on a false positive that was already
-documented independently, rather than on a staged one.
+Phase 1 misses the pothole the other two catch. That is a real disagreement
+between passes over the same road, and it is what makes a confirmation count
+carry information — some defects reach `distinct_buses=3`, others don't.
+
+### The demo split
+
+Stride costs detections (12 events at stride 1, 4–5 at stride 3), so the two
+jobs use different settings:
+
+- **Seeded history** — `--stride 3`, phases 0/1/2, backdated, GPS noise on.
+  Three or four buses per route, run before the demo. Varied confirmation
+  counts, and it's 3× faster to seed.
+- **The live pass** — window 1 at `--stride 1`, full quality, smooth video,
+  maximum detections.
+
+Which gives a better demo than uniform passes would: the defects the live bus
+reports land on pins that are **already there**, and their confirmation counts
+tick up in front of the audience. *"That pothole was already reported twice
+this week"* is the whole fleet argument in one sentence.
 
 ```bash
-python run_edge.py -s 62_10-07-2023.mp4 --route route-21 --bus BUS_001 --phase 0
-python run_edge.py -s 62_10-07-2023.mp4 --route route-21 --bus BUS_002 --phase 1 --at "-2h" --gps-noise 6
-python run_edge.py -s 62_10-07-2023.mp4 --route route-21 --bus BUS_003 --phase 2 --at "-1d" --gps-noise 6
+# seed history: three buses, three phases, backdated
+python run_edge.py -s <clip> --route route-21g --bus BUS_002 --stride 3 --phase 0 --at=-3d --gps-noise 6 --speed-jitter 0.1
+python run_edge.py -s <clip> --route route-21g --bus BUS_003 --stride 3 --phase 1 --at=-1d --gps-noise 6 --speed-jitter 0.1
+python run_edge.py -s <clip> --route route-21g --bus BUS_004 --stride 3 --phase 2 --at=-2h --gps-noise 6 --speed-jitter 0.1
 ```
 
-Three clips × 3 phases across 2–3 routes is enough to populate a map that
-behaves like a fleet.
+`--at` needs the `=` form: argparse reads a bare `-2h` as a flag.
+
+Three clips across three routes, each with a few phased passes, is enough to
+populate a map that behaves like a fleet.
 
 ### What the footage cannot show
 
