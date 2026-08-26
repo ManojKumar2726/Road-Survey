@@ -13,17 +13,37 @@ for the statement and [Docs/V1-Plan.md](Docs/V1-Plan.md) for the build plan.
 
 ## The two windows
 
-**Window 1 — onboard system** (`edge/`, Streamlit on `:8501`). Upload a clip,
-watch annotated frames stream with boxes and track IDs, watch events fire as
-each defect leaves frame.
+### Window 1 — onboard system
 
-**Window 2 — centralized system** (`server/`, FastAPI on `:8000`). Leaflet map
-with the fleet's defects, and the database as a live table directly below it.
-Both update in real time as window 1 processes.
+`edge/`, Streamlit on `:8501`. Upload a clip, watch annotated frames stream with
+boxes and track IDs, watch events fire as each defect leaves frame.
 
-The only thing crossing between them is a JSON event and a ~9 KB crop. **Video
-never leaves the bus** — a 60-frame pass over a 12.3 MB clip sends 39 KB, a
-99.7% reduction, and window 1 shows that figure live as it runs.
+![Onboard system mid-pass](Docs/assets/onboard.jpg)
+
+Every defect leaves the bus as one event plus one ~9 KB crop. The **Sent**
+counter is the edge-processing argument, measured live: 50 KB against a 12.3 MB
+clip in the shot above. **Video never leaves the bus.**
+
+### Window 2 — centralized system
+
+`server/`, FastAPI on `:8010`. Leaflet map of the fleet's defects, with the
+database as a live table directly below it. Both update in real time as window
+1 processes.
+
+![Control room dashboard](Docs/assets/dashboard.jpg)
+
+The map plots **defects**, not sightings. 92 sightings from 10 buses collapse
+into 43 physical defects — `open` where more than one bus agrees, `unconfirmed`
+where only one has seen it.
+
+### Why that distinction matters
+
+![Defect detail with sighting history](Docs/assets/defect-detail.jpg)
+
+Click a defect and you get its evidence: the best crop, and every bus that has
+reported it. This one was seen **8 times by 3 different buses over 4 days** —
+a far stronger claim than any single confidence score, and the thing that turns
+a pile of detections into a maintenance work order.
 
 ---
 
