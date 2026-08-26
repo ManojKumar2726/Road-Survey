@@ -1,5 +1,5 @@
 # Repo-wide noise. Component-specific rules live in that component's .gitignore
-# (see pothole-lab/.gitignore for model weights, sample media and run outputs).
+# (see road-damage-lab/.gitignore for model weights, sample media and run outputs).
 
 __pycache__/
 *.py[cod]

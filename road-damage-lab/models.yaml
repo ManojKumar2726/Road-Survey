@@ -1,0 +1,391 @@
+# =============================================================================
+# Model registry for the road-damage lab.
+#
+# Adding a model = adding a block here. Nothing else to change.
+#
+# source: hf           -> pulled from the Hugging Face Hub (cached in weights/hf)
+#         local        -> a .pt file on disk (path relative to the repo root)
+#         ultralytics  -> a stock ultralytics checkpoint name (auto-downloaded)
+#
+# Weights download lazily, on the first run that actually uses the model, so
+# leaving many entries enabled costs nothing until you select one.
+#
+# Optional per-model knobs (become the UI defaults when the model is picked):
+#   default_conf, default_iou, default_imgsz, class_names, class_map,
+#   notes, enabled
+#
+# ---- class_map ----
+# Raw class ids don't agree between checkpoints. Two RDD2022 models here order
+# the *same* four classes differently:
+#
+#   rdd-*        0:longitudinal  1:transverse  2:alligator  3:pothole
+#   ozair-yolov8s  0:alligator   1:transverse  2:longitudinal  3:other  4:pothole
+#
+# so `class_map:` pins each model's raw ids onto the lab's canonical damage
+# keys (labcore/taxonomy.py). That's what makes colours, class filters, stats
+# and the survey report comparable across models. Valid keys:
+#
+#   pothole  alligator_crack  longitudinal_crack  transverse_crack
+#   crack    other            repair              unknown
+#
+# Every map below was read off the actual checkpoint via
+# `python run_cli.py --inspect`, not off a model card -- the cards get the
+# ordering wrong.
+# =============================================================================
+
+models:
+  # ==========================================================================
+  # RDD2022 multi-class road damage
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # SreekarAditya's benchmark: eight architectures trained on the same RDD2022
+  # split with the same protocol. This is the apples-to-apples comparison set
+  # -- if you want to know which backbone is actually better, use these.
+  #
+  # Their published sweep puts peak F1 at conf 0.10-0.20, not the YOLO default
+  # of 0.25, so these entries default to 0.15.
+  # --------------------------------------------------------------------------
+  - id: rdd-yolo12s
+    name: "RDD2022 - YOLOv12s"
+    source: hf
+    repo_id: SreekarAditya/yolo-rdd2022-benchmark
+    filename: yolo-rdd2022-benchmark/yolo12s_seed0_best.pt
+    task: detect
+    default_conf: 0.15
+    default_imgsz: 640
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole}
+    notes: "Rank #1 of the eight (Friedman 2.14). Best all-round starting point."
+
+  - id: rdd-yolo12m
+    name: "RDD2022 - YOLOv12m"
+    source: hf
+    repo_id: SreekarAditya/yolo-rdd2022-benchmark
+    filename: yolo-rdd2022-benchmark/yolo12m_seed0_best.pt
+    task: detect
+    default_conf: 0.15
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole}
+    notes: "Highest raw mAP50 (0.6325) and best peak F1. Slowest of the set."
+
+  - id: rdd-yolov9s
+    name: "RDD2022 - YOLOv9s"
+    source: hf
+    repo_id: SreekarAditya/yolo-rdd2022-benchmark
+    filename: yolo-rdd2022-benchmark/yolov9s_seed0_best.pt
+    task: detect
+    default_conf: 0.15
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole}
+    notes: "Statistically tied with YOLOv12s -- their gap is inside seed noise."
+
+  - id: rdd-yolov8s
+    name: "RDD2022 - YOLOv8s"
+    source: hf
+    repo_id: SreekarAditya/yolo-rdd2022-benchmark
+    filename: yolo-rdd2022-benchmark/yolov8s_seed0_best.pt
+    task: detect
+    default_conf: 0.15
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole}
+    notes: "Best of the older generation; rank 3 of 8."
+
+  - id: rdd-yolo11s
+    name: "RDD2022 - YOLOv11s"
+    source: hf
+    repo_id: SreekarAditya/yolo-rdd2022-benchmark
+    filename: yolo-rdd2022-benchmark/yolo11s_seed0_best.pt
+    task: detect
+    default_conf: 0.15
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole}
+    notes: "Newer backbone that doesn't beat v8s here -- a useful null result."
+
+  - id: rdd-yolov5s
+    name: "RDD2022 - YOLOv5s"
+    source: hf
+    repo_id: SreekarAditya/yolo-rdd2022-benchmark
+    filename: yolo-rdd2022-benchmark/yolov5s_seed0_best.pt
+    task: detect
+    default_conf: 0.20
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole}
+    notes: "The old baseline. Still within 3 mAP points of YOLOv12s."
+
+  - id: rdd-yolov10s
+    name: "RDD2022 - YOLOv10s"
+    source: hf
+    repo_id: SreekarAditya/yolo-rdd2022-benchmark
+    filename: yolo-rdd2022-benchmark/yolov10s_seed0_best.pt
+    task: detect
+    default_conf: 0.10
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole}
+    notes: >-
+      NMS-free head -- scores worst on the published benchmark, but recovers
+      +5.4 mAP50 once standard NMS is applied, which is what this lab does.
+      Expect it to beat its own paper numbers here.
+
+  - id: rdd-yolo12n
+    name: "RDD2022 - YOLOv12n"
+    source: hf
+    repo_id: SreekarAditya/yolo-rdd2022-benchmark
+    filename: yolo-rdd2022-benchmark/yolo12n_seed0_best.pt
+    task: detect
+    default_conf: 0.10
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole}
+    notes: "Weakest of the eight, but the fastest -- the edge-device proxy."
+
+  # ---- resolution ablation on YOLOv12s. Off by default; enable to see what
+  # ---- input size costs and buys on the same weights-training recipe.
+  - id: rdd-yolo12s-480
+    name: "RDD2022 - YOLOv12s @480"
+    source: hf
+    repo_id: SreekarAditya/yolo-rdd2022-benchmark
+    filename: yolo-rdd2022-benchmark/yolo12s_480px_seed0_best.pt
+    task: detect
+    default_conf: 0.15
+    default_imgsz: 480
+    enabled: false
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole}
+    notes: "Trained at 480px. -4.4 mAP50 vs the 640px default."
+
+  - id: rdd-yolo12s-800
+    name: "RDD2022 - YOLOv12s @800"
+    source: hf
+    repo_id: SreekarAditya/yolo-rdd2022-benchmark
+    filename: yolo-rdd2022-benchmark/yolo12s_800px_seed0_best.pt
+    task: detect
+    default_conf: 0.15
+    default_imgsz: 800
+    enabled: false
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole}
+    notes: "Trained at 800px. Best mAP of any YOLOv12s variant; slowest."
+
+  # --------------------------------------------------------------------------
+  # A second, independent RDD2022 training -- different author, different run.
+  # Adds a 'Repair' class the benchmark set doesn't have, which is genuinely
+  # useful: a patched road isn't damaged, and models without the class tend to
+  # call patches alligator cracking.
+  # --------------------------------------------------------------------------
+  - id: rezzzq-yolo12s
+    name: "rezzzq - YOLOv12s RDD2022 (+repair)"
+    source: hf
+    repo_id: rezzzq/yolo12s-road-damage-rdd2022
+    filename: yolo12s_RDD2022_best.pt
+    task: detect
+    default_conf: 0.15
+    class_map: {0: longitudinal_crack, 1: transverse_crack, 2: alligator_crack, 3: pothole, 4: repair}
+    notes: >-
+      Raw class names are the RDD D-codes (D00/D10/D20/D40/Repair); the lab
+      relabels them. Loads on mainline ultralytics -- the fork its card asks
+      for isn't needed.
+
+  # --------------------------------------------------------------------------
+  # Deliberately kept: its class ORDER is different from every other RDD model
+  # here (alligator and longitudinal are swapped). Run it against rdd-yolo12s
+  # in compare mode -- without class_map the two would disagree on every box.
+  # --------------------------------------------------------------------------
+  - id: ozair-yolov8s
+    name: "ozair23 - YOLOv8 road damage (5cls)"
+    source: hf
+    repo_id: ozair23/yolov8-road-damage-detector
+    filename: best.pt
+    task: detect
+    default_conf: 0.20
+    class_map: {0: alligator_crack, 1: transverse_crack, 2: longitudinal_crack, 3: other, 4: pothole}
+    notes: >-
+      Class order is swapped vs the rdd-* models, and it adds 'other
+      corruption'. The taxonomy layer's test case.
+
+  # ==========================================================================
+  # Crack segmentation -- mask-quality counterpoint to the box models
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # OpenSistemas ship all five sizes trained on the Ultralytics crack-seg set.
+  # Single class, so no orientation split -- these map onto the generic `crack`
+  # key rather than pretending to know longitudinal from transverse.
+  # --------------------------------------------------------------------------
+  - id: crackseg-yolov8s
+    name: "crack-seg - YOLOv8s"
+    source: hf
+    repo_id: OpenSistemas/YOLOv8-crack-seg
+    filename: yolov8s/weights/best.pt
+    task: segment
+    default_conf: 0.25
+    class_map: {0: crack}
+    notes: "Balanced size. The lab draws its boxes; masks are computed, not shown."
+
+  - id: crackseg-yolov8n
+    name: "crack-seg - YOLOv8n"
+    source: hf
+    repo_id: OpenSistemas/YOLOv8-crack-seg
+    filename: yolov8n/weights/best.pt
+    task: segment
+    default_conf: 0.25
+    enabled: false
+    class_map: {0: crack}
+    notes: "Nano -- edge devices."
+
+  - id: crackseg-yolov8m
+    name: "crack-seg - YOLOv8m"
+    source: hf
+    repo_id: OpenSistemas/YOLOv8-crack-seg
+    filename: yolov8m/weights/best.pt
+    task: segment
+    default_conf: 0.25
+    enabled: false
+    class_map: {0: crack}
+    notes: "Medium."
+
+  - id: crackseg-yolov8l
+    name: "crack-seg - YOLOv8l"
+    source: hf
+    repo_id: OpenSistemas/YOLOv8-crack-seg
+    filename: yolov8l/weights/best.pt
+    task: segment
+    default_conf: 0.25
+    enabled: false
+    class_map: {0: crack}
+    notes: "Large."
+
+  - id: crackseg-yolov8x
+    name: "crack-seg - YOLOv8x"
+    source: hf
+    repo_id: OpenSistemas/YOLOv8-crack-seg
+    filename: yolov8x/weights/best.pt
+    task: segment
+    default_conf: 0.25
+    enabled: false
+    class_map: {0: crack}
+    notes: "Extra-large. Slowest here by a wide margin."
+
+  # ==========================================================================
+  # Pothole specialists
+  #
+  # Single-class, so they can't tell you a road is cracking -- but on potholes
+  # specifically they're trained harder than the RDD models, which have to
+  # spread capacity across four classes. Worth comparing directly: filter the
+  # RDD models to `pothole` and put one of these beside it.
+  # ==========================================================================
+
+  - id: samdutse-yolov8
+    name: "Samdutse - pothole yolov8"
+    source: hf
+    repo_id: Samdutse/pothole-yolov8
+    filename: best.pt
+    task: detect
+    default_conf: 0.25
+    default_iou: 0.45
+    default_imgsz: 640
+    class_map: {0: pothole}
+    notes: "YOLOv8s (11.1M params) fine-tuned for potholes. Single class."
+
+  # --------------------------------------------------------------------------
+  # EngJamesO ships five architectures trained on the same pothole data --
+  # the pothole-only equivalent of the rdd-* comparison set above.
+  # --------------------------------------------------------------------------
+  - id: engjameso-yolov11
+    name: "EngJamesO - YOLOv11"
+    source: hf
+    repo_id: EngJamesO/pothole-detector
+    filename: models/yolov11.pt
+    task: detect
+    default_conf: 0.25
+    class_map: {0: pothole}
+    notes: "Newer backbone, usually the strongest of this family."
+
+  - id: engjameso-yolov12n
+    name: "EngJamesO - YOLOv12n"
+    source: hf
+    repo_id: EngJamesO/pothole-detector
+    filename: models/yolov12n.pt
+    task: detect
+    default_conf: 0.25
+    class_map: {0: pothole}
+    notes: "Nano YOLOv12 -- fastest here; good edge-device proxy."
+
+  - id: engjameso-yolov9c
+    name: "EngJamesO - YOLOv9c"
+    source: hf
+    repo_id: EngJamesO/pothole-detector
+    filename: models/yolov9c.pt
+    task: detect
+    default_conf: 0.25
+    class_map: {0: pothole}
+    notes: "YOLOv9 compact."
+
+  - id: engjameso-yolov8n
+    name: "EngJamesO - YOLOv8n"
+    source: hf
+    repo_id: EngJamesO/pothole-detector
+    filename: models/yolov8n.pt
+    task: detect
+    default_conf: 0.25
+    class_map: {0: pothole}
+    notes: "Nano baseline for this family."
+
+  - id: engjameso-yolov8fpn
+    name: "EngJamesO - YOLOv8-FPN"
+    source: hf
+    repo_id: EngJamesO/pothole-detector
+    filename: models/yolov8-fpn.pt
+    task: detect
+    default_conf: 0.25
+    class_map: {0: pothole}
+    notes: "YOLOv8 with an FPN neck -- worth a look on small/distant potholes."
+
+  # --------------------------------------------------------------------------
+  # keremberke's segmentation set. The lab draws boxes only; masks are ignored,
+  # but the box quality is a useful counterpoint to the detection models.
+  # --------------------------------------------------------------------------
+  - id: keremberke-yolov8n-seg
+    name: "keremberke - yolov8n seg"
+    source: hf
+    repo_id: keremberke/yolov8n-pothole-segmentation
+    filename: best.pt
+    task: segment
+    default_conf: 0.25
+    class_map: {0: pothole}
+    notes: "Segmentation head. Fast; the most downloaded pothole model on the Hub."
+
+  - id: keremberke-yolov8s-seg
+    name: "keremberke - yolov8s seg"
+    source: hf
+    repo_id: keremberke/yolov8s-pothole-segmentation
+    filename: best.pt
+    task: segment
+    default_conf: 0.25
+    class_map: {0: pothole}
+    notes: "Small segmentation model."
+
+  - id: keremberke-yolov8m-seg
+    name: "keremberke - yolov8m seg"
+    source: hf
+    repo_id: keremberke/yolov8m-pothole-segmentation
+    filename: best.pt
+    task: segment
+    default_conf: 0.25
+    class_map: {0: pothole}
+    notes: "Medium segmentation model. Slowest of the three, usually tightest boxes."
+
+  # ==========================================================================
+  # Baseline -- a sanity check that the pipeline itself works. Off by default.
+  # ==========================================================================
+  - id: yolov8n-coco
+    name: "YOLOv8n (COCO baseline)"
+    source: ultralytics
+    weights: yolov8n.pt
+    task: detect
+    default_conf: 0.35
+    enabled: false
+    notes: >-
+      Generic COCO model. Will NOT find road damage -- pipeline smoke test
+      only. Deliberately has no class_map, so its 80 COCO classes all land on
+      `unknown` and draw grey.
+
+  # ==========================================================================
+  # Your own runs: point at any .pt you have trained locally.
+  # ==========================================================================
+  # - id: my-run-01
+  #   name: "My YOLOv11 run 01"
+  #   source: local
+  #   path: weights/local/my_run_01.pt
+  #   task: detect
+  #   default_conf: 0.3
+  #   class_map: {0: pothole, 1: alligator_crack}

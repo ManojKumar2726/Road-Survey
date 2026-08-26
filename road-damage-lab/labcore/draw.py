@@ -13,6 +13,7 @@ from typing import Any, Iterable, Sequence
 import cv2
 import numpy as np
 
+from . import taxonomy as tax
 from .detector import Detection
 
 FONT = cv2.FONT_HERSHEY_DUPLEX
@@ -99,10 +100,15 @@ class DrawOptions:
     trail_length: int = 32
     box_thickness: int = 0  # 0 = auto from frame size
     font_scale: float = 0.0  # 0 = auto from frame size
-    color_by: str = "track"  # "track" | "class" | "confidence"
+    color_by: str = "class"  # "class" | "track" | "confidence"
     hud_position: str = "top-left"  # "top-left" | "top-right"
     hud_detail: str = "compact"  # "compact" = live stats only | "full" = + settings
     hud_scale: float = 0.85  # multiplier on the auto-computed HUD text size
+    # "canonical" shows the lab's damage type, so two models labelling the same
+    # defect "D40" and "Pothole" read identically. "raw" shows what the
+    # checkpoint actually called it -- useful when auditing a class_map.
+    label_mode: str = "canonical"  # "canonical" | "raw"
+    show_legend: bool = True  # per-damage-type tally, bottom-left
 
 
 # --------------------------------------------------------------------------- #
@@ -203,10 +209,17 @@ class Annotator:
             lambda: deque(maxlen=self.opt.trail_length)
         )
         self._seen_ids: set[int] = set()
+        # Unique track IDs per canonical damage type -- drives the legend.
+        self._seen_by_class: dict[str, set[int]] = defaultdict(set)
+        # Fallback tally for runs without tracking, where there are no IDs to
+        # make unique: count boxes in the current frame instead.
+        self._now_by_class: dict[str, int] = {}
 
     def reset(self) -> None:
         self._trails.clear()
         self._seen_ids.clear()
+        self._seen_by_class.clear()
+        self._now_by_class.clear()
 
     # ----------------------------------------------------------------- scale
 
@@ -220,7 +233,9 @@ class Annotator:
     def _det_color(self, det: Detection, idx: int) -> tuple[int, int, int]:
         mode = self.opt.color_by
         if mode == "class":
-            return color_for(det.cls_id)
+            # Keyed to the canonical damage type, not the raw class id, so a
+            # pothole is the same colour in every model's output.
+            return tax.color_of(det.canon)
         if mode == "confidence":
             # red -> amber -> green as confidence rises
             c = max(0.0, min(1.0, det.conf))
@@ -246,9 +261,12 @@ class Annotator:
         scale, thick = self._metrics(img)
 
         # Register IDs before laying the HUD out so its counter isn't a frame behind.
+        self._now_by_class = {}
         for det in detections:
+            self._now_by_class[det.canon] = self._now_by_class.get(det.canon, 0) + 1
             if det.track_id is not None:
                 self._seen_ids.add(det.track_id)
+                self._seen_by_class[det.canon].add(det.track_id)
 
         # Lay the HUD out first (without drawing it) so box labels can dodge it.
         layout = None
@@ -307,7 +325,9 @@ class Annotator:
         parts: list[str] = []
         if self.opt.show_track_id and det.track_id is not None:
             parts.append(f"#{det.track_id}")
-        parts.append(det.label)
+        parts.append(
+            det.label if self.opt.label_mode == "raw" else tax.short_of(det.canon)
+        )
         if self.opt.show_conf:
             parts.append(f"{det.conf:.2f}")
         chip = "  ".join(parts)
@@ -418,7 +438,7 @@ class Annotator:
         # Floor is low enough that the size slider still bites on small frames;
         # below ~0.3 the Hershey font gets hard to read, which is the user's call.
         s = max(0.24, scale * 0.86 * max(0.4, self.opt.hud_scale))
-        title = str(hud.get("title", "pothole lab"))
+        title = str(hud.get("title", "road damage lab"))
 
         # Compact keeps only what changes frame to frame; the static settings
         # live in the sidebar anyway. "full" stamps them onto exported video.
@@ -454,25 +474,40 @@ class Annotator:
         px = W - panel_w - 12 if self.opt.hud_position == "top-right" else 12
         px = max(0, px)
 
+        # A single "unique objects" number means nothing once a model reports
+        # five damage types, so the footer is a legend: one swatched row per
+        # type actually seen, worst-first, with its running tally.
         footer: Rect | None = None
-        foot_text = ""
-        foot_th = 0
-        if self._seen_ids:
-            foot_text = f"unique potholes seen: {len(self._seen_ids)}"
-            fw, foot_th, fb = _measure(foot_text, s, 1)
-            fpad = int(6 * s) + 4
-            footer = (
-                12,
-                H - (foot_th + fb + 2 * fpad) - 12,
-                fw + 2 * fpad,
-                foot_th + fb + 2 * fpad,
+        legend: list[tuple[str, str, tuple[int, int, int]]] = []
+        legend_th = 0
+        if self.opt.show_legend:
+            tally = (
+                {k: len(v) for k, v in self._seen_by_class.items() if v}
+                if self._seen_ids
+                else dict(self._now_by_class)
             )
+            for key in tax.sort_keys(tally):
+                if tally.get(key):
+                    legend.append(
+                        (tax.short_of(key), str(tally[key]), tax.color_of(key))
+                    )
+
+        if legend:
+            lw, legend_th, lb = _measure("Xg", s, 1)
+            fpad = int(6 * s) + 4
+            sw = legend_th  # square colour swatch, matched to the cap height
+            row_h = legend_th + lb + int(4 * s) + 2
+            widest = max(
+                _measure(f"{name}  {n}", s, 1)[0] for name, n, _ in legend
+            )
+            fh = 2 * fpad + row_h * len(legend)
+            footer = (12, max(0, H - fh - 12), widest + sw + int(6 * s) + 2 * fpad + 6, fh)
 
         return {
             "panel": (px, 12, panel_w, panel_h),
             "footer": footer,
-            "footer_text": foot_text,
-            "footer_th": foot_th,
+            "legend": legend,
+            "legend_th": legend_th,
             "title": title,
             "rows": rows,
             "s": s,
@@ -498,19 +533,28 @@ class Annotator:
             _text(img, k, (px + pad, y), s, HUD_DIM, 1, FONT_THIN)
             _text(img, v, (px + pad + L["label_w"] + L["gap"], y), s, HUD_FG, 1)
 
-        # tiny footer, bottom-left: total unique potholes so far
-        if L["footer"]:
+        # legend, bottom-left: running tally per damage type
+        if L["footer"] and L["legend"]:
             fx, fy, fw, fh = L["footer"]
             fpad = int(6 * s) + 4
-            _panel(img, fx, fy, fw, fh, HUD_BG, 0.62, int(6 * s) + 3)
-            _text(
-                img,
-                L["footer_text"],
-                (fx + fpad, fy + fpad + L["footer_th"]),
-                s,
-                HUD_FG,
-                1,
-            )
+            lth = L["legend_th"]
+            row_h = (fh - 2 * fpad) // max(1, len(L["legend"]))
+            _panel(img, fx, fy, fw, fh, HUD_BG, 0.66, int(6 * s) + 3)
+
+            y = fy + fpad
+            for name, count, color in L["legend"]:
+                cv2.rectangle(
+                    img, (fx + fpad, y + 1), (fx + fpad + lth, y + lth + 1), color, -1
+                )
+                _text(
+                    img,
+                    f"{name}  {count}",
+                    (fx + fpad + lth + int(6 * s) + 2, y + lth),
+                    s,
+                    HUD_FG,
+                    1,
+                )
+                y += row_h
 
 
 def draw_empty_notice(frame: np.ndarray, text: str = "no detections") -> np.ndarray:

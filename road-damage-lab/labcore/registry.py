@@ -35,6 +35,10 @@ class ModelSpec:
     default_iou: float = 0.45
     default_imgsz: int = 640
     class_names: dict[int, str] | None = None
+    # Raw class id -> canonical damage key (see labcore/taxonomy.py). Without
+    # this the lab falls back to matching the checkpoint's own class names,
+    # which is fine for obvious ones ("pothole") and wrong for D-codes.
+    class_map: dict[int, str] | None = None
     notes: str = ""
     enabled: bool = True
 
@@ -156,6 +160,20 @@ def _coerce(raw: dict[str, Any]) -> ModelSpec:
     for required in ("id", "name", "source"):
         if not raw.get(required):
             raise ValueError(f"models.yaml entry is missing required key '{required}'")
+
+    # A typo'd canonical key would silently colour boxes grey and drop them out
+    # of the survey report, so catch it at parse time rather than at run time.
+    cmap = raw.get("class_map")
+    if cmap:
+        from .taxonomy import ORDER, TAXONOMY
+
+        bad = {k: v for k, v in cmap.items() if str(v) not in TAXONOMY}
+        if bad:
+            raise ValueError(
+                f"models.yaml entry '{raw['id']}' maps to unknown canonical "
+                f"key(s): {bad}. Valid keys: {', '.join(ORDER)}"
+            )
+
     return ModelSpec(**raw)
 
 

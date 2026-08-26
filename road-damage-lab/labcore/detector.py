@@ -14,6 +14,7 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
+from . import taxonomy as tax
 from .registry import ModelSpec
 
 
@@ -37,13 +38,33 @@ USE_QUANTIZE = _supports_quantize()
 
 @dataclass
 class Detection:
-    """One box in one frame, normalised across model families."""
+    """One box in one frame, normalised across model families.
+
+    `label` is whatever the checkpoint called this class; `canon` is the
+    lab-wide damage key it maps onto. Compare models on `canon`, never on
+    `cls_id` -- raw ids don't agree between checkpoints.
+    """
 
     xyxy: tuple[float, float, float, float]
     conf: float
     cls_id: int
     label: str
     track_id: int | None = None
+    canon: str = tax.UNKNOWN_KEY
+
+    # ------------------------------------------------------------- taxonomy
+
+    @property
+    def damage(self) -> tax.DamageClass:
+        return tax.get(self.canon)
+
+    @property
+    def canon_label(self) -> str:
+        return self.damage.label
+
+    @property
+    def severity(self) -> float:
+        return self.damage.severity
 
     @property
     def x1(self) -> float:
@@ -87,6 +108,9 @@ class Detection:
         return {
             "frame": frame_idx,
             "track_id": self.track_id if self.track_id is not None else -1,
+            "damage": self.canon,
+            "damage_label": self.canon_label,
+            "severity": self.severity,
             "label": self.label,
             "cls_id": self.cls_id,
             "conf": round(self.conf, 4),
@@ -197,11 +221,34 @@ class Detector:
             raw_names = {**raw_names, **spec.class_names}
         self.names: dict[int, str] = {int(k): str(v) for k, v in raw_names.items()}
 
+        # Raw ids are meaningless across checkpoints -- everything downstream
+        # works in canonical keys, resolved once here.
+        self.canon_by_id: dict[int, str] = tax.build_class_map(
+            self.names, spec.class_map
+        )
+        self.map_warnings: list[str] = tax.validate_class_map(
+            self.names, spec.class_map
+        )
+
     # ------------------------------------------------------------------ meta
 
     @property
     def class_names(self) -> list[str]:
         return [self.names[k] for k in sorted(self.names)]
+
+    @property
+    def canon_keys(self) -> list[str]:
+        """Canonical damage types this model can emit, worst-first."""
+        return tax.sort_keys(self.canon_by_id.values())
+
+    def ids_for_canon(self, keys: Iterable[str]) -> list[int]:
+        """Raw class ids for a set of canonical keys.
+
+        This is what makes "show only potholes" work in compare mode: each
+        model resolves the same canonical selection to its own indices.
+        """
+        wanted = set(keys)
+        return sorted(c for c, k in self.canon_by_id.items() if k in wanted)
 
     def describe(self) -> dict[str, Any]:
         n_params = None
@@ -218,7 +265,13 @@ class Detector:
             "device": device_label(self.device),
             "half": self.half,
             "classes": self.class_names,
+            "class_map": {
+                cid: f"{self.names[cid]} -> {self.canon_by_id[cid]}"
+                for cid in sorted(self.names)
+            },
+            "damage_types": self.canon_keys,
             "params_m": round(n_params / 1e6, 2) if n_params else None,
+            "map_warnings": self.map_warnings,
         }
 
     # ------------------------------------------------------------- inference
@@ -327,13 +380,17 @@ class Detector:
         dets: list[Detection] = []
         for i in range(len(xyxy)):
             cid = int(clss[i])
+            raw_label = str(names.get(cid, f"class_{cid}"))
             dets.append(
                 Detection(
                     xyxy=tuple(float(v) for v in xyxy[i]),  # type: ignore[arg-type]
                     conf=float(confs[i]),
                     cls_id=cid,
-                    label=str(names.get(cid, f"class_{cid}")),
+                    label=raw_label,
                     track_id=int(ids[i]) if ids is not None else None,
+                    # `result.names` can differ from the names captured at load
+                    # time, so fall back to matching on the label itself.
+                    canon=self.canon_by_id.get(cid) or tax.canon_from_name(raw_label),
                 )
             )
         return dets
@@ -345,7 +402,12 @@ class Detector:
 
 
 class RunStats:
-    """Running totals for one video pass."""
+    """Running totals for one video pass, broken down by damage type.
+
+    A single "unique objects" count stops being useful once a model reports
+    five damage types, so the per-class unique-ID tallies are the number that
+    actually answers "what's wrong with this road".
+    """
 
     def __init__(self) -> None:
         self.frames = 0
@@ -353,17 +415,35 @@ class RunStats:
         self.unique_ids: set[int] = set()
         self.conf_sum = 0.0
         self.ms: list[float] = []
-        self.per_class: dict[str, int] = {}
+        self.per_class: dict[str, int] = {}  # canonical key -> boxes seen
+        self.per_raw_label: dict[str, int] = {}  # the model's own names
+        self.unique_by_class: dict[str, set[int]] = {}
+        self.conf_sum_by_class: dict[str, float] = {}
+        self.area_pct_by_class: dict[str, float] = {}
 
-    def update(self, dets: Iterable[Detection], infer_ms: float) -> None:
+    def update(
+        self,
+        dets: Iterable[Detection],
+        infer_ms: float,
+        frame_w: int = 0,
+        frame_h: int = 0,
+    ) -> None:
         self.frames += 1
         self.ms.append(infer_ms)
         for d in dets:
             self.total_dets += 1
             self.conf_sum += d.conf
-            self.per_class[d.label] = self.per_class.get(d.label, 0) + 1
+            k = d.canon
+            self.per_class[k] = self.per_class.get(k, 0) + 1
+            self.per_raw_label[d.label] = self.per_raw_label.get(d.label, 0) + 1
+            self.conf_sum_by_class[k] = self.conf_sum_by_class.get(k, 0.0) + d.conf
+            if frame_w and frame_h:
+                self.area_pct_by_class[k] = self.area_pct_by_class.get(
+                    k, 0.0
+                ) + d.area_pct(frame_w, frame_h)
             if d.track_id is not None:
                 self.unique_ids.add(d.track_id)
+                self.unique_by_class.setdefault(k, set()).add(d.track_id)
 
     @property
     def mean_conf(self) -> float:
@@ -377,13 +457,44 @@ class RunStats:
     def fps(self) -> float:
         return 1000.0 / self.mean_ms if self.mean_ms > 0 else 0.0
 
+    @property
+    def classes_seen(self) -> list[str]:
+        """Canonical keys with at least one detection, worst-first."""
+        return tax.sort_keys(self.per_class)
+
+    def unique_counts(self) -> dict[str, int]:
+        """Canonical key -> unique track IDs. The headline survey number."""
+        return {k: len(self.unique_by_class.get(k, ())) for k in self.classes_seen}
+
+    def mean_conf_of(self, key: str) -> float:
+        n = self.per_class.get(key, 0)
+        return self.conf_sum_by_class.get(key, 0.0) / n if n else 0.0
+
+    @property
+    def severity_score(self) -> float:
+        """Severity-weighted damage rate: weighted unique finds per 100 frames.
+
+        Weights come from the taxonomy, so a pothole counts for ~3x a
+        transverse crack. Comparable only across runs on the same clip.
+        """
+        if not self.frames:
+            return 0.0
+        # Without tracking every frame re-counts the same defect, so fall back
+        # to box counts and let the per-frame rate carry the meaning.
+        counts = self.unique_counts() if self.unique_ids else self.per_class
+        weighted = sum(tax.severity_of(k) * n for k, n in counts.items())
+        return 100.0 * weighted / self.frames
+
     def summary(self) -> dict[str, Any]:
         return {
             "frames": self.frames,
             "detections": self.total_dets,
-            "unique_potholes": len(self.unique_ids),
+            "unique_objects": len(self.unique_ids),
+            "unique_by_class": self.unique_counts(),
             "mean_conf": round(self.mean_conf, 3),
             "mean_infer_ms": round(self.mean_ms, 2),
             "fps": round(self.fps, 1),
+            "severity_score": round(self.severity_score, 2),
             "per_class": dict(self.per_class),
+            "per_raw_label": dict(self.per_raw_label),
         }

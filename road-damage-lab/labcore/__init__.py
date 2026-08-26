@@ -1,4 +1,4 @@
-"""Core building blocks for the pothole-detection lab."""
+"""Core building blocks for the road-damage lab."""
 
 import os as _os
 
@@ -11,9 +11,11 @@ _os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "-8")  # AV_LOG_QUIET
 # to copies. That's fine here (a handful of small .pt files) -- don't warn about it.
 _os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
+from . import taxonomy
 from .registry import ModelSpec, load_registry, get_spec, list_specs
 from .detector import Detection, Detector, resolve_device
 from .draw import Annotator, DrawOptions
+from .survey import SurveyReport, build_report
 from .video import VideoSource, VideoSink, probe_video
 
 __all__ = [
@@ -26,6 +28,9 @@ __all__ = [
     "resolve_device",
     "Annotator",
     "DrawOptions",
+    "SurveyReport",
+    "build_report",
+    "taxonomy",
     "VideoSource",
     "VideoSink",
     "probe_video",
