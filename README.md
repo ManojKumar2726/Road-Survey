@@ -42,8 +42,8 @@ pip install -r server/requirements.txt
 
 ```bash
 cd server
-python -m uvicorn app.main:app --port 8000
-# dashboard at http://127.0.0.1:8000
+python run.py
+# dashboard at http://127.0.0.1:8010
 ```
 
 **Window 1** — the bus:
@@ -51,6 +51,7 @@ python -m uvicorn app.main:app --port 8000
 ```bash
 cd edge
 streamlit run app_edge.py
+# onboard UI at http://127.0.0.1:8501
 ```
 
 Pick a clip, press **Start pass**, and watch pins land in window 2.
@@ -60,8 +61,15 @@ so the live pass lands on defects that already exist:
 
 ```bash
 cd edge
-python seed_demo.py --api http://127.0.0.1:8000     # 15 passes, ~2 min
+python seed_demo.py            # 15 passes, ~2 min
 ```
+
+> **Why 8010 and not 8000?** 8000 is a crowded port. If something else is
+> already listening there, the onboard unit posts events into whatever that
+> happens to be, and the failure looks like a network problem rather than a
+> misconfiguration. Both halves default to 8010 so it just works. To use a
+> different port: `python run.py --port N`, then set the same URL in window 1's
+> **API URL** box (or export `ROADSURVEY_API_URL`).
 
 > Uses SQLite by default so it runs with nothing installed. For Postgres:
 > `DATABASE_URL=postgresql+psycopg://user:pw@localhost/roadsurvey`

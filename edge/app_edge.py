@@ -236,8 +236,11 @@ if go and source_path:
         reachable = pub.ping()
         if not reachable:
             st.warning(
-                f"{api_url} is not reachable — events will spool to disk and "
-                "drain on the next pass that connects."
+                f"**{api_url} is not reachable.** Events will spool to disk and "
+                "drain on the next pass that connects — nothing is lost.\n\n"
+                "Most likely the control room is on a different port. Start it "
+                "with `python run.py` in `server/`, and make sure the **API URL** "
+                "above matches the port it prints."
             )
         pub.start()
 
