@@ -14,8 +14,10 @@ import json
 import sys
 from pathlib import Path
 
+from edgecore.config import EdgeConfig
 from edgecore.gps import RouteReplay, TrackReplay, get_route, parse_when
 from edgecore.pipeline import Pipeline, PipelineConfig
+from edgecore.publisher import EventPublisher
 
 EDGE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUT = EDGE_DIR / "runs"
@@ -103,6 +105,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-frames", type=int, default=None, help="Sightings before a track counts")
     p.add_argument("--miss-tolerance", type=int, default=None, help="Frames unseen before a track closes")
 
+    n = p.add_argument_group("central system")
+    n.add_argument("--post", action="store_true", help="POST events to the central system as they fire")
+    n.add_argument("--api", default=None, help="API base URL (default $ROADSURVEY_API_URL or localhost:8000)")
+    n.add_argument("--no-post-crops", action="store_true", help="Post events without their crops")
+
     p.add_argument("--out", default=None, help="Output directory (default edge/runs/<clip>__<bus>)")
     p.add_argument("--no-crops", action="store_true", help="Don't extract or write crops")
     p.add_argument("--quiet", "-q", action="store_true")
@@ -182,8 +189,26 @@ def main() -> int:
         else:
             print("    no route -- events will have no position")
 
+    pub: EventPublisher | None = None
+    if args.post:
+        econf = EdgeConfig.from_env().merge_cli(api_url=args.api)
+        pub = EventPublisher(
+            api_url=econf.api_url,
+            spool_dir=econf.spool_dir,
+            batch_size=econf.batch_size,
+            timeout_s=econf.api_timeout_s,
+            include_crops=not args.no_post_crops,
+        )
+        reachable = pub.ping()
+        if not args.quiet:
+            state = "reachable" if reachable else "NOT reachable — events will spool"
+            print(f"    posting to {econf.api_url}  ({state})")
+        pub.start()
+
     events = []
     for upd in pipe.run(source):
+        if pub is not None and upd.new_events:
+            pub.publish(upd.new_events)
         for ev in upd.new_events:
             events.append(ev)
             if not args.quiet:
@@ -206,6 +231,9 @@ def main() -> int:
 
     if not args.quiet:
         print()
+
+    if pub is not None:
+        pub.close()  # flush the queue; anything unsent lands in the spool
 
     # ---- write events + crops
     if not args.no_crops and any(e.crop_jpeg for e in events):
@@ -272,6 +300,19 @@ def main() -> int:
                 "(not counted as events)"
             )
         print(f"  wrote {out_dir / 'events.json'}  ({len(events)} events, {wire / 1024:.0f} KB on the wire)")
+        if pub is not None:
+            s = pub.stats
+            print(
+                f"  posted {s.posted}, {s.duplicates} duplicate, "
+                f"{s.drained} drained from spool, {s.bytes_sent / 1024:.0f} KB sent"
+            )
+            if pub.spool_depth:
+                print(
+                    f"  {pub.spool_depth} batch(es) still spooled at {pub.spool_dir} "
+                    "— they'll drain on the next run that connects"
+                )
+            if s.last_error:
+                print(f"  last error: {s.last_error}")
 
     return 0
 

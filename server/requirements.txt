@@ -1,0 +1,10 @@
+# Centralized system -- API, database, dashboard
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+sqlalchemy>=2.0.30
+pydantic>=2.7.0
+
+# Postgres driver. The default DATABASE_URL is SQLite, so this is only needed
+# when pointing at a real Postgres:
+#   DATABASE_URL=postgresql+psycopg://user:pw@localhost/roadsurvey
+psycopg[binary]>=3.1.0

@@ -1,0 +1,6 @@
+# SQLite database and uploaded crops -- runtime state, not source
+data/
+media/
+
+__pycache__/
+*.py[cod]
