@@ -42,8 +42,20 @@ pip install -r server/requirements.txt
 
 ```bash
 cd server
-python run.py
+python run.py            # starts with an empty map
+python run.py --keep     # ...or keep what was already reported
 # dashboard at http://127.0.0.1:8010
+```
+
+**`run.py` starts empty by default.** Test passes otherwise pile up into a map
+nobody can read, so each start clears reported data — sightings, the defects
+clustered from them, the bus roster and stored crops. Routes survive; they're
+configuration, re-seeded from `edge/routes/` every startup.
+
+To clear without restarting (the dashboard notices and empties itself):
+
+```bash
+curl -X POST http://127.0.0.1:8010/api/admin/reset
 ```
 
 **Window 1** — the bus:
@@ -63,6 +75,9 @@ so the live pass lands on defects that already exist:
 cd edge
 python seed_demo.py            # 15 passes, ~2 min
 ```
+
+Seeded history is reported data, so it is cleared by the next plain `run.py`.
+On demo day either seed *after* starting the server, or restart with `--keep`.
 
 > **Why 8010 and not 8000?** 8000 is a crowded port. If something else is
 > already listening there, the onboard unit posts events into whatever that

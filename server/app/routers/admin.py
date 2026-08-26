@@ -11,8 +11,18 @@ from sqlalchemy.orm import Session
 
 from .. import clustering
 from ..db import get_db
+from ..reset import reset_data
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+@router.post("/reset")
+def reset(db: Session = Depends(get_db), keep_crops: bool = False):
+    """Clear every sighting, defect and bus. Routes are configuration and stay.
+
+    Lets you start a clean pass without restarting the server.
+    """
+    return reset_data(db, drop_crops=not keep_crops)
 
 
 @router.post("/recluster")

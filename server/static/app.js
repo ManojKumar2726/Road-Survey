@@ -413,6 +413,23 @@ function fitToData() {
 async function poll() {
   try {
     const stats = await api("/api/stats");
+
+    // The server was reset (or pointed at a different database) while this
+    // page stayed open. Event ids restart from 1, so a cursor left at the old
+    // high-water mark would silently skip every new event. Detect it by the
+    // id going backwards and start over.
+    if (stats.latest_event_id < state.lastEventId) {
+      state.lastEventId = 0;
+      state.events.clear();
+      state.defects.clear();
+      state.selected = null;
+      state.firstLoad = true;
+      $("detail").classList.add("hidden");
+      $("alerts").innerHTML = "";
+      markerLayer.clearLayers();
+      state.markers.clear();
+    }
+
     renderStats(stats);
 
     // Events come in on a cursor; defects are re-read whole because clustering
